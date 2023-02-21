@@ -4,12 +4,6 @@ import Display
 import AsyncDisplayKit
 import SwiftSignalKit
 
-private let compactNameFont = Font.regular(28.0)
-private let regularNameFont = Font.regular(36.0)
-
-private let compactStatusFont = Font.regular(18.0)
-private let regularStatusFont = Font.regular(18.0)
-
 enum CallControllerStatusValue: Equatable {
     case text(string: String, displayLogo: Bool)
     case timer((String, Bool) -> String, Double)
@@ -154,15 +148,8 @@ final class CallControllerStatusNode: ASDisplayNode {
     func updateLayout(constrainedWidth: CGFloat, transition: ContainedViewLayoutTransition) -> CGFloat {
         self.validLayoutWidth = constrainedWidth
         
-        let nameFont: UIFont
-        let statusFont: UIFont
-        if constrainedWidth < 330.0 {
-            nameFont = compactNameFont
-            statusFont = compactStatusFont
-        } else {
-            nameFont = regularNameFont
-            statusFont = regularStatusFont
-        }
+        let nameFont: UIFont = Font.regular(28.0)
+        let statusFont: UIFont = Font.regular(16.0)
         
         var statusOffset: CGFloat = 0.0
         let statusText: String
