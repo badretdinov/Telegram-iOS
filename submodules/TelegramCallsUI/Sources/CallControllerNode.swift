@@ -1526,18 +1526,18 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.videoContainerNode.update(size: containerFullScreenFrame.size, transition: transition)
         
         if let keyPreviewNode = self.keyPreviewNode {
-            transition.updateFrame(node: keyPreviewNode, frame: containerFullScreenFrame)
-            keyPreviewNode.updateLayout(size: layout.size, transition: .immediate)
+            let size = keyPreviewNode.updateLayout(size: containerFullScreenFrame.size, transition: .immediate)
+            transition.updateFrame(node: keyPreviewNode, frame: .init(origin: CGPoint(x: (containerFullScreenFrame.size.width - size.width)/2, y: self.avatarNode.frame.maxY - size.height), size: size))
         }
         
         let navigationOffset: CGFloat = max(20.0, layout.safeInsets.top)
-        let topOriginY = interpolate(from: -20.0, to: navigationOffset, value: uiDisplayTransition)
+        let topOriginY = interpolate(from: -20.0, to: navigationOffset, value: uiDisplayTransition) + 11
         
         let backSize = self.backButtonNode.measure(CGSize(width: 320.0, height: 100.0))
         if let image = self.backButtonArrowNode.image {
-            transition.updateFrame(node: self.backButtonArrowNode, frame: CGRect(origin: CGPoint(x: 10.0, y: topOriginY + 22.0), size: image.size))
+            transition.updateFrame(node: self.backButtonArrowNode, frame: CGRect(origin: CGPoint(x: 10.0, y: topOriginY + 11.0), size: image.size))
         }
-        transition.updateFrame(node: self.backButtonNode, frame: CGRect(origin: CGPoint(x: 29.0, y: topOriginY + 22.0), size: backSize))
+        transition.updateFrame(node: self.backButtonNode, frame: CGRect(origin: CGPoint(x: 29.0, y: topOriginY + 11.0), size: backSize))
         
         transition.updateAlpha(node: self.backButtonArrowNode, alpha: overlayAlpha)
         transition.updateAlpha(node: self.backButtonNode, alpha: overlayAlpha)
@@ -1701,7 +1701,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     
     @objc func keyPressed() {
         if self.keyPreviewNode == nil, let keyText = self.keyTextData?.1, let peer = self.peer {
-            let keyPreviewNode = CallControllerKeyPreviewNode(keyText: keyText, infoText: self.presentationData.strings.Call_EmojiDescription(EnginePeer(peer).compactDisplayTitle).string.replacingOccurrences(of: "%%", with: "%"), dismiss: { [weak self] in
+            let keyPreviewNode = CallControllerKeyPreviewNode(keyText: keyText, titleText: "This call is end-to end encrypted", infoText: self.presentationData.strings.Call_EmojiDescription(EnginePeer(peer).compactDisplayTitle).string.replacingOccurrences(of: "%%", with: "%"), buttonText: self.presentationData.strings.Common_OK, dismiss: { [weak self] in
                 if let _ = self?.keyPreviewNode {
                     self?.backPressed()
                 }
@@ -1711,10 +1711,11 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             self.keyPreviewNode = keyPreviewNode
             
             if let (validLayout, _) = self.validLayout {
-                keyPreviewNode.updateLayout(size: validLayout.size, transition: .immediate)
+                let size = keyPreviewNode.updateLayout(size: validLayout.size, transition: .immediate)
+                keyPreviewNode.frame = .init(origin: CGPoint(x: (validLayout.size.width - size.width)/2, y: self.avatarNode.frame.maxY - size.height), size: size)
                 
                 self.keyButtonNode.isHidden = true
-                keyPreviewNode.animateIn(from: self.keyButtonNode.frame, fromNode: self.keyButtonNode)
+                keyPreviewNode.animateIn(fromNode: self.keyButtonNode)
             }
         }
     }
@@ -1722,7 +1723,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     @objc func backPressed() {
         if let keyPreviewNode = self.keyPreviewNode {
             self.keyPreviewNode = nil
-            keyPreviewNode.animateOut(to: self.keyButtonNode.frame, toNode: self.keyButtonNode, completion: { [weak self, weak keyPreviewNode] in
+            keyPreviewNode.animateOut(toNode: self.keyButtonNode, completion: { [weak self, weak keyPreviewNode] in
                 self?.keyButtonNode.isHidden = false
                 keyPreviewNode?.removeFromSupernode()
             })
