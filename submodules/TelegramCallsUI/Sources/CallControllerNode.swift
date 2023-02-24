@@ -17,6 +17,7 @@ import AlertUI
 import PresentationDataUtils
 import DeviceAccess
 import ContextUI
+import AudioBlob
 
 private func interpolateFrame(from fromValue: CGRect, to toValue: CGRect, t: CGFloat) -> CGRect {
     return CGRect(x: floorToScreenPixels(toValue.origin.x * t + fromValue.origin.x * (1.0 - t)), y: floorToScreenPixels(toValue.origin.y * t + fromValue.origin.y * (1.0 - t)), width: floorToScreenPixels(toValue.size.width * t + fromValue.size.width * (1.0 - t)), height: floorToScreenPixels(toValue.size.height * t + fromValue.size.height * (1.0 - t)))
@@ -370,6 +371,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private let containerNode: ASDisplayNode
     private let videoContainerNode: PinchSourceContainerNode
     
+    private var audioLevelPeerID: PeerId?
+    private let audioLevelDisposable = MetaDisposable()
+    private let audioLevelNode: VoiceBlobNode
     private let avatarNode: TransformImageNode
     
     private var candidateIncomingVideoNodeValue: CallVideoNode?
@@ -482,6 +486,14 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         
         self.videoContainerNode = PinchSourceContainerNode()
         
+        self.audioLevelNode = VoiceBlobNode(
+            maxLevel: 0.3,
+            smallBlobRange: (0, 0),
+            mediumBlobRange: (0.7, 0.8),
+            bigBlobRange: (0.8, 0.9)
+        )
+        self.audioLevelNode.setColor(.white)
+        
         self.avatarNode = TransformImageNode()
         self.avatarNode.contentAnimations = [.subsequentUpdates]
         
@@ -525,6 +537,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             }
         }
         
+        self.containerNode.addSubnode(self.audioLevelNode)
         self.containerNode.addSubnode(self.avatarNode)
         self.containerNode.addSubnode(self.videoContainerNode)
         self.containerNode.addSubnode(self.statusNode)
@@ -780,6 +793,18 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     }
     
     func updatePeer(accountPeer: Peer, peer: Peer, hasOther: Bool) {
+        self.audioLevelNode.startAnimating(immediately: true)
+        
+        if self.peer?.id != peer.id {
+            self.audioLevelDisposable.set((self.call.audioLevel |> deliverOnMainQueue).start { [weak self] level in
+                guard let self else {
+                    return
+                }
+                
+                self.audioLevelNode.updateLevel(CGFloat(level), immediately: false)
+            })
+        }
+        
         if !arePeersEqual(self.peer, peer) {
             self.peer = peer
             if let peerReference = PeerReference(peer), !peer.profileImageRepresentations.isEmpty {
@@ -1040,7 +1065,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 }
             case .terminating:
                 statusValue = .text(string: self.presentationData.strings.Call_StatusEnded, displayLogo: false)
-            case let .terminated(_, reason, _):
+        case let .terminated(_, reason, _):
+            self.stopAudioLevelAnimation()
                 if let reason = reason {
                     switch reason {
                         case let .ended(type):
@@ -1549,6 +1575,16 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         let arguments = TransformImageArguments(corners: ImageCorners(radius: avatarSize.width/2), imageSize: avatarSize, boundingSize: avatarSize, intrinsicInsets: UIEdgeInsets())
         let apply = self.avatarNode.asyncLayout()(arguments)
         apply()
+        
+        let audioLevelSize = CGSize(width: 220, height: 220)
+        let audioLevelFrame = CGRect(
+            origin: CGPoint(
+                x: (containerFullScreenFrame.width - audioLevelSize.width)/2,
+                y: (avatarOriginY + avatarSize.height/2  - audioLevelSize.height/2)
+            ),
+            size: audioLevelSize
+        )
+        transition.updateFrame(node: self.audioLevelNode, frame: audioLevelFrame)
         
         let statusOffset = avatarOriginY + avatarSize.height + 40
         
@@ -2091,6 +2127,14 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             return self.containerTransformationNode.view.hitTest(self.view.convert(point, to: self.containerTransformationNode.view), with: event)
         }
         return nil
+    }
+    
+    private func stopAudioLevelAnimation(transition: ContainedViewLayoutTransition = .animated(duration: 0.3, curve: .spring)) {
+        self.audioLevelNode.stopAnimating()
+        self.audioLevelDisposable.dispose()
+        transition.updateAlpha(node: self.audioLevelNode, alpha: 0)
+        transition.updateTransformScale(node: self.audioLevelNode, scale: 0)
+        
     }
 }
 
