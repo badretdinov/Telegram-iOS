@@ -99,12 +99,15 @@ final class CallControllerKeyButton: HighlightableButtonNode {
         
     func animateIn() {
         self.layoutIfNeeded()
-        self.containerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+        self.containerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
         
-        var duration: Double = 0.75
-        for node in self.nodes {
-            node.animateIn(duration: duration)
-            duration += 0.3
+        var shift: CGFloat = -25
+        for node in self.nodes.reversed() {
+            var from = node.position
+            from.x += shift
+            node.layer.animatePosition(from: from, to: node.position, duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring)
+            
+            shift -= 25
         }
     }
     

@@ -517,6 +517,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.addSubnode(self.containerTransformationNode)
         self.containerTransformationNode.addSubnode(self.containerNode)
         
+        self.backButtonArrowNode.isHidden = true
+        self.backButtonNode.isHidden = true
         self.backButtonNode.setTitle(presentationData.strings.Common_Back, with: Font.regular(17.0), with: .white, for: [])
         self.backButtonNode.accessibilityLabel = presentationData.strings.Call_VoiceOver_Minimize
         self.backButtonNode.accessibilityTraits = [.button]
@@ -1132,6 +1134,22 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                     if let (layout, navigationBarHeight) = self.validLayout {
                         self.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: .immediate)
                     }
+                    
+                    self.present?(TooltipScreen(account: self.account, text: "Encryption key of this call", style: .light, icon: nil, location: .point(self.keyButtonNode.frame, .top), displayDuration: .custom(3.0), inset: 16, shouldDismissOnTouch: { _ in
+                        return .dismiss(consume: false)
+                    }))
+                    
+                    self.backButtonNode.isHidden = false
+                    self.backButtonArrowNode.isHidden = false
+                    self.backButtonNode.layer.animateAlpha(from: 0, to: 1, duration: 0.3)
+                    self.backButtonArrowNode.layer.animateAlpha(from: 0, to: 1, duration: 0.3)
+                    var backFrom = self.backButtonNode.position
+                    backFrom.x += 50
+                    self.backButtonNode.layer.animatePosition(from: backFrom, to: self.backButtonNode.position, duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring)
+                    var backArrowFrom = self.backButtonArrowNode.position
+                    backArrowFrom.x += 25
+                    self.backButtonArrowNode.layer.animatePosition(from: backArrowFrom, to: self.backButtonArrowNode.position, duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring)
+                    
                 }
                 
                 statusValue = .timer({ value, measure in
