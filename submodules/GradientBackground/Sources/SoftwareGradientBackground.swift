@@ -266,6 +266,7 @@ public final class GradientBackgroundNode: ASDisplayNode {
     static var sharedPhase: Int = 0
     
     private var isAnimating: Bool = false
+    private var hasUnlimiedAnimation: Bool = false
 
     private let saturation: CGFloat
     
@@ -566,5 +567,21 @@ public final class GradientBackgroundNode: ASDisplayNode {
         } else {
             completion()
         }
+    }
+    
+    public func startUnlimitedAnimation() {
+        guard !self.hasUnlimiedAnimation else {
+            return
+        }
+        
+        self.hasUnlimiedAnimation = true
+        
+        self.itterateAnimation()
+    }
+    
+    private func itterateAnimation() {
+        self.animateEvent(transition: .animated(duration: 1, curve: .linear), extendAnimation: false, backwards: false, completion: { [weak self] in
+            self?.itterateAnimation()
+        })
     }
 }

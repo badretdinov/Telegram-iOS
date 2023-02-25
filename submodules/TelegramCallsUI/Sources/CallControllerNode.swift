@@ -18,6 +18,7 @@ import PresentationDataUtils
 import DeviceAccess
 import ContextUI
 import AudioBlob
+import GradientBackground
 
 private func interpolateFrame(from fromValue: CGRect, to toValue: CGRect, t: CGFloat) -> CGRect {
     return CGRect(x: floorToScreenPixels(toValue.origin.x * t + fromValue.origin.x * (1.0 - t)), y: floorToScreenPixels(toValue.origin.y * t + fromValue.origin.y * (1.0 - t)), width: floorToScreenPixels(toValue.size.width * t + fromValue.size.width * (1.0 - t)), height: floorToScreenPixels(toValue.size.height * t + fromValue.size.height * (1.0 - t)))
@@ -348,6 +349,38 @@ private final class CallVideoNode: ASDisplayNode, PreviewVideoNode {
 }
 
 final class CallControllerNode: ViewControllerTracingNode, CallControllerNodeProtocol {
+    private enum BackgroundState {
+        case idle
+        case active
+        case warning
+        
+        var colors: [UIColor] {
+            switch self {
+            case .idle:
+                return [
+                    UIColor(rgb: 0x7261DA),
+                    UIColor(rgb: 0xAC65D4),
+                    UIColor(rgb: 0x616AD5),
+                    UIColor(rgb: 0x5295D6)
+                ]
+            case .active:
+                return [
+                    UIColor(rgb: 0x398D6F),
+                    UIColor(rgb: 0x53A6DE),
+                    UIColor(rgb: 0x3C9C8F),
+                    UIColor(rgb: 0xBAC05D)
+                ]
+            case .warning:
+                return [
+                    UIColor(rgb: 0xFF7E46),
+                    UIColor(rgb: 0xC94986),
+                    UIColor(rgb: 0xF4992E),
+                    UIColor(rgb: 0xB84498)
+                ]
+            }
+        }
+    }
+    
     private enum VideoNodeCorner {
         case topLeft
         case topRight
@@ -375,6 +408,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private let audioLevelDisposable = MetaDisposable()
     private let audioLevelNode: VoiceBlobNode
     private let avatarNode: TransformImageNode
+    
+    private var backgroundNode: GradientBackgroundNode
+    private var backgroundState: BackgroundState = .idle
     
     private var candidateIncomingVideoNodeValue: CallVideoNode?
     private var incomingVideoNodeValue: CallVideoNode?
@@ -503,6 +539,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.backButtonArrowNode.image = NavigationBarTheme.generateBackArrowImage(color: .white)
         self.backButtonNode = HighlightableButtonNode()
         
+        self.backgroundNode = GradientBackgroundNode()
+        
         self.statusNode = CallControllerStatusNode()
         
         self.buttonsNode = CallControllerButtonsNode(strings: self.presentationData.strings)
@@ -539,6 +577,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             }
         }
         
+        self.containerNode.addSubnode(self.backgroundNode)
         self.containerNode.addSubnode(self.audioLevelNode)
         self.containerNode.addSubnode(self.avatarNode)
         self.containerNode.addSubnode(self.videoContainerNode)
@@ -548,6 +587,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.containerNode.addSubnode(self.keyButtonNode)
         self.containerNode.addSubnode(self.backButtonArrowNode)
         self.containerNode.addSubnode(self.backButtonNode)
+        
+        self.backgroundNode.updateColors(colors: self.backgroundState.colors)
         
         self.buttonsNode.mute = { [weak self] in
             self?.toggleMute?()
@@ -1058,16 +1099,20 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 
         switch callState.state {
             case .waiting, .connecting:
+                self.changeBackgroundState(to: .idle)
                 statusValue = .text(string: self.presentationData.strings.Call_StatusConnecting, displayLogo: false)
             case let .requesting(ringing):
+                self.changeBackgroundState(to: .idle)
                 if ringing {
                     statusValue = .text(string: self.presentationData.strings.Call_StatusRinging, displayLogo: false)
                 } else {
                     statusValue = .text(string: self.presentationData.strings.Call_StatusRequesting, displayLogo: false)
                 }
             case .terminating:
+                self.changeBackgroundState(to: .idle)
                 statusValue = .text(string: self.presentationData.strings.Call_StatusEnded, displayLogo: false)
         case let .terminated(_, reason, _):
+            self.changeBackgroundState(to: .idle)
             self.stopAudioLevelAnimation()
                 if let reason = reason {
                     switch reason {
@@ -1115,6 +1160,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 }
                 statusValue = .text(string: text, displayLogo: false)
             case .active(let timestamp, let reception, let keyVisualHash), .reconnecting(let timestamp, let reception, let keyVisualHash):
+                let newBGState: BackgroundState = (reception ?? 0) <= 1 ? .warning : .active
+                self.changeBackgroundState(to: newBGState)
                 let strings = self.presentationData.strings
                 var isReconnecting = false
                 if case .reconnecting = callState.state {
@@ -1348,6 +1395,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     }
     
     func animateIn() {
+        
+        
         if !self.containerNode.alpha.isZero {
             var bounds = self.bounds
             bounds.origin = CGPoint()
@@ -1568,6 +1617,10 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         transition.updateFrame(node: self.containerNode, frame: CGRect(origin: CGPoint(x: (containerFrame.width - layout.size.width) / 2.0, y: floor(containerFrame.height - layout.size.height) / 2.0), size: layout.size))
         transition.updateFrame(node: self.videoContainerNode, frame: containerFullScreenFrame)
         self.videoContainerNode.update(size: containerFullScreenFrame.size, transition: transition)
+        
+        self.backgroundNode.updateLayout(size: containerFullScreenFrame.size, transition: transition, extendAnimation: false, backwards: false, completion: {})
+        transition.updateFrame(node: self.backgroundNode, frame: containerFullScreenFrame)
+        self.backgroundNode.startUnlimitedAnimation()
         
         if let keyPreviewNode = self.keyPreviewNode {
             let size = keyPreviewNode.updateLayout(size: containerFullScreenFrame.size, transition: .immediate)
@@ -2153,6 +2206,27 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         transition.updateAlpha(node: self.audioLevelNode, alpha: 0)
         transition.updateTransformScale(node: self.audioLevelNode, scale: 0)
         
+    }
+    
+    private func changeBackgroundState(to newState: BackgroundState) {
+        guard self.backgroundState != newState else {
+            return
+        }
+        
+        let newNode = GradientBackgroundNode(colors: newState.colors)
+        self.containerNode.insertSubnode(newNode, aboveSubnode: self.backgroundNode)
+        newNode.frame = self.backgroundNode.frame
+        newNode.updateLayout(size: newNode.frame.size, transition: .immediate, extendAnimation: false, backwards: false, completion: {})
+        newNode.startUnlimitedAnimation()
+        self.backgroundState = newState
+        newNode.layer.animateAlpha(from: 0, to: 1, duration: 0.3, completion: { [weak self] _ in
+            guard let self else {
+                return
+            }
+            
+            self.backgroundNode.removeFromSupernode()
+            self.backgroundNode = newNode
+        })
     }
 }
 
