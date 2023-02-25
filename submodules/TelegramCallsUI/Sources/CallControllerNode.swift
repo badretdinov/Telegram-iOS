@@ -1823,6 +1823,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 
                 self.keyButtonNode.isHidden = true
                 keyPreviewNode.animateIn(fromNode: self.keyButtonNode)
+                self.animateAvatarDissapearing()
             }
         }
     }
@@ -1834,6 +1835,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 self?.keyButtonNode.isHidden = false
                 keyPreviewNode?.removeFromSupernode()
             })
+            self.animateAvatarAppearing()
         } else if self.hasVideoNodes {
             if let (layout, navigationHeight) = self.validLayout {
                 self.pictureInPictureTransitionFraction = 1.0
@@ -2227,6 +2229,27 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             self.backgroundNode.removeFromSupernode()
             self.backgroundNode = newNode
         })
+    }
+    
+    private func animateAvatarDissapearing() {
+        self.avatarNode.layer.animateAlpha(from: 1, to: 0, duration: 0.3, removeOnCompletion: false, completion: { [weak self] _ in
+            self?.avatarNode.isHidden = true
+        })
+        self.audioLevelNode.layer.animateAlpha(from: 1, to: 0, duration: 0.3, removeOnCompletion: false, completion: { [weak self] _ in
+            self?.audioLevelNode.isHidden = true
+        })
+        self.avatarNode.layer.animateScale(from: 1, to: 0.3, duration: 0.3)
+        self.audioLevelNode.layer.animateScale(from: 1, to: 0.3, duration: 0.3)
+    }
+    
+    private func animateAvatarAppearing() {
+        self.avatarNode.isHidden = false
+        self.audioLevelNode.isHidden = false
+        
+        self.avatarNode.layer.animateAlpha(from: 0, to: 1, duration: 0.3)
+        self.audioLevelNode.layer.animateAlpha(from: 0, to: 1, duration: 0.3)
+        self.avatarNode.layer.animateScale(from: 0.3, to: 1, duration: 0.3)
+        self.audioLevelNode.layer.animateScale(from: 0.3, to: 1, duration: 0.3)
     }
 }
 
