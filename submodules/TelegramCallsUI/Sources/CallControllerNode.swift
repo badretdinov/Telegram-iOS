@@ -381,6 +381,12 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         }
     }
     
+    private enum AvatarAnimation {
+        case pendingForInitialAnimation
+        case pulsing
+        case blink
+    }
+    
     private enum VideoNodeCorner {
         case topLeft
         case topRight
@@ -408,6 +414,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private let audioLevelDisposable = MetaDisposable()
     private let audioLevelNode: VoiceBlobNode
     private let avatarNode: TransformImageNode
+    private var avatarAnimation: AvatarAnimation? = .pendingForInitialAnimation
     
     private var backgroundNode: GradientBackgroundNode
     private var backgroundState: BackgroundState = .idle
@@ -853,6 +860,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             if let peerReference = PeerReference(peer), !peer.profileImageRepresentations.isEmpty {
                 let representations: [ImageRepresentationWithReference] = peer.profileImageRepresentations.map({ ImageRepresentationWithReference(representation: $0, reference: .avatar(peer: peerReference, resource: $0.resource)) })
                 self.avatarNode.setSignal(chatAvatarGalleryPhoto(account: self.account, representations: representations, immediateThumbnailData: nil, autoFetchFullSize: true))
+                if self.avatarAnimation == .pendingForInitialAnimation {
+                    self.updateAvatarAnimation(.pulsing)
+                }
             }
             
             self.toastNode.title = EnginePeer(peer).compactDisplayTitle
@@ -1160,6 +1170,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 }
                 statusValue = .text(string: text, displayLogo: false)
             case .active(let timestamp, let reception, let keyVisualHash), .reconnecting(let timestamp, let reception, let keyVisualHash):
+                if self.avatarAnimation == .pulsing {
+                    self.updateAvatarAnimation(.blink)
+                }
                 let newBGState: BackgroundState = (reception ?? 0) <= 1 ? .warning : .active
                 self.changeBackgroundState(to: newBGState)
                 let strings = self.presentationData.strings
@@ -2250,6 +2263,45 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.audioLevelNode.layer.animateAlpha(from: 0, to: 1, duration: 0.3)
         self.avatarNode.layer.animateScale(from: 0.3, to: 1, duration: 0.3)
         self.audioLevelNode.layer.animateScale(from: 0.3, to: 1, duration: 0.3)
+    }
+    
+    private func updateAvatarAnimation(_ newAnimation: AvatarAnimation?) {
+        guard self.avatarAnimation != newAnimation else {
+            return
+        }
+        
+        self.avatarAnimation = newAnimation
+        
+        guard let newAnimation else {
+            self.avatarNode.layer.removeAnimation(forKey: "transform.scale")
+            self.audioLevelNode.layer.removeAnimation(forKey: "transform.scale")
+            return
+        }
+        
+        switch newAnimation {
+        case .blink:
+            let avatarValues: [NSNumber] = [1.0, 1.2, 0.9, 1.0]
+            let audioLevels: [NSNumber] = [1.0, 1.4, 0.9, 1.0]
+            self.avatarNode.layer.animateKeyframes(values: avatarValues, duration: 0.5, keyPath: "transform.scale", timingFunction: CAMediaTimingFunctionName.easeOut.rawValue)
+            self.audioLevelNode.layer.animateKeyframes(values: audioLevels, duration: 0.5, keyPath: "transform.scale", timingFunction: CAMediaTimingFunctionName.easeOut.rawValue)
+        case .pulsing:
+            self.itterateAvatarPulseAnimation()
+        case .pendingForInitialAnimation:
+            break
+        }
+    }
+    
+    private func itterateAvatarPulseAnimation() {
+        guard self.avatarAnimation == .pulsing else {
+            return
+        }
+        
+        let avatarValues: [NSNumber] = [1.0, 1.05, 1.0]
+        let audioLevels: [NSNumber] = [1.0, 1.1, 1.0]
+        self.avatarNode.layer.animateKeyframes(values: avatarValues, duration: 3, keyPath: "transform.scale", timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, completion: { [weak self] _ in
+            self?.itterateAvatarPulseAnimation()
+        })
+        self.audioLevelNode.layer.animateKeyframes(values: audioLevels, duration: 3, keyPath: "transform.scale", timingFunction: CAMediaTimingFunctionName.easeOut.rawValue)
     }
 }
 
