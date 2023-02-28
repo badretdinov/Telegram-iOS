@@ -309,17 +309,17 @@ func rateCallAndSendLogs(engine: TelegramEngine, callId: CallId, starsCount: Int
     }
 }
 
-public func callRatingController(sharedContext: SharedAccountContext, account: Account, callId: CallId, userInitiated: Bool, isVideo: Bool, present: @escaping (ViewController, Any) -> Void, push: @escaping (ViewController) -> Void) -> AlertController {
+public func legacyCallRatingController(sharedContext: SharedAccountContext, account: Account, callId: CallId, userInitiated: Bool, isVideo: Bool, present: @escaping (ViewController, Any) -> Void, push: @escaping (ViewController) -> Void) -> AlertController {
     let presentationData = sharedContext.currentPresentationData.with { $0 }
     let theme = presentationData.theme
     let strings = presentationData.strings
-    
+
     var dismissImpl: ((Bool) -> Void)?
     var contentNode: CallRatingAlertContentNode?
     let actions: [TextAlertAction] = [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_NotNow, action: {
         dismissImpl?(true)
     })]
-    
+
     contentNode = CallRatingAlertContentNode(theme: AlertControllerTheme(presentationData: presentationData), ptheme: theme, strings: strings, actions: actions, dismiss: {
         dismissImpl?(true)
     }, apply: { rating in
@@ -330,7 +330,7 @@ public func callRatingController(sharedContext: SharedAccountContext, account: A
             let _ = rateCallAndSendLogs(engine: TelegramEngine(account: account), callId: callId, starsCount: rating, comment: "", userInitiated: userInitiated, includeLogs: false).start()
         }
     })
-    
+
     let controller = AlertController(theme: AlertControllerTheme(presentationData: presentationData), contentNode: contentNode!)
     dismissImpl = { [weak controller] animated in
         if animated {

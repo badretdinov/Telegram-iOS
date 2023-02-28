@@ -661,6 +661,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             
             self.callDisposable = (callManager.currentCallSignal
             |> deliverOnMainQueue).start(next: { [weak self] call in
+                guard call != nil else {
+                    return
+                }
+                
                 if let strongSelf = self {
                     if call !== strongSelf.callController?.call {
                         strongSelf.callController?.dismiss()

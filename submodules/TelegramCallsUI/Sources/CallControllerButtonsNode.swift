@@ -99,6 +99,10 @@ final class CallControllerButtonsNode: ASDisplayNode {
     
     private var validLayout: (CGFloat, CGFloat)?
     
+    var closeButtonNode: CallControllerButtonItemNode? {
+        self.buttonNodes[.acceptOrEnd]
+    }
+    
     var isMuted = false
     
     var acceptOrEnd: (() -> Void)?

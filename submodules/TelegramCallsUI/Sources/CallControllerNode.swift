@@ -450,6 +450,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private let toastNode: CallControllerToastContainerNode
     private let buttonsNode: CallControllerButtonsNode
     private var keyPreviewNode: CallControllerKeyPreviewNode?
+    private var ratingCloseButton: CallControllerRatingCloseButtonNode?
+    private var ratingNode: CallControllerRatingNode?
     
     private var debugNode: CallDebugNode?
     
@@ -482,7 +484,6 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     var acceptCall: (() -> Void)?
     var endCall: (() -> Void)?
     var back: (() -> Void)?
-    var presentCallRating: ((CallId, Bool) -> Void)?
     var callEnded: ((Bool) -> Void)?
     var dismissedInteractively: (() -> Void)?
     var present: ((ViewController) -> Void)?
@@ -1259,12 +1260,13 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             }
         }
         
-        if case let .terminated(id, _, reportRating) = callState.state, let callId = id {
+        if case let .terminated(id, _, _) = callState.state, let callId = id {
             let presentRating = reportRating || self.forceReportRating
             if presentRating {
-                self.presentCallRating?(callId, self.call.isVideo)
+                self.presentCallRating(callID: callId, isVideo: self.call.isVideo)
+            } else {
+                self.back?()
             }
-            self.callEnded?(presentRating)
         }
         
         let hasIncomingVideoNode = self.incomingVideoNodeValue != nil && self.expandedVideoNode === self.incomingVideoNodeValue
@@ -1817,6 +1819,16 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 self.call.setRequestedVideoAspect(Float(requestedAspect))
             }
         }
+        
+        if let ratingCloseButton {
+            let size = ratingCloseButton.updateLayout(size: CGSize(width: 304, height: 50))
+            transition.updateFrame(node: ratingCloseButton, frame: CGRect(origin: CGPoint(x: (layout.size.width - size.width)/2, y: layout.size.height - 89 - size.height), size: size))
+        }
+
+        if let ratingNode {
+            let ratingSize = ratingNode.updateLayout(width: 304)
+            transition.updateFrame(node: ratingNode, frame: CGRect(x: (layout.size.width - ratingSize.width)/2, y: layout.size.height - ratingSize.height - 205, width: ratingSize.width, height: ratingSize.height))
+        }
     }
     
     @objc func keyPressed() {
@@ -2303,6 +2315,72 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         })
         self.audioLevelNode.layer.animateKeyframes(values: audioLevels, duration: 3, keyPath: "transform.scale", timingFunction: CAMediaTimingFunctionName.easeOut.rawValue)
     }
+    
+    private func presentCallRating(callID: CallId, isVideo: Bool) {
+        let ratingNode = CallControllerRatingNode(title: "Rate This Call", description: "Please rate the quality of this call.")
+        self.ratingNode = ratingNode
+        self.containerNode.addSubnode(ratingNode)
+        ratingNode.didSelectRating = { [weak self] rating in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: {
+                self?.back?()
+            })
+        }
+            //MARK: implement
+//            if rating < 4 {
+//                push(callFeedbackController(sharedContext: sharedContext, account: account, callId: callId, rating: rating, userInitiated: userInitiated, isVideo: isVideo))
+//            } else {
+//                let _ = rateCallAndSendLogs(engine: TelegramEngine(account: account), callId: callId, starsCount: rating, comment: "", userInitiated: userInitiated, includeLogs: false).start()
+//            }
+//        }
+        
+        let closeButton = CallControllerRatingCloseButtonNode(text: self.presentationData.strings.Common_Close)
+        closeButton.addTarget(self, action: #selector(self.handleCloseButton), forControlEvents: .touchUpInside)
+        closeButton.timeOutAction = { [weak self] in
+            self?.back?()
+        }
+        self.ratingCloseButton = closeButton
+        self.containerNode.addSubnode(closeButton)
+        
+        if let (layout, navigationBarHeight) = self.validLayout {
+            self.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: .immediate)
+        }
+        
+        self.buttonsNode.layer.animateAlpha(from: 1, to: 0, duration: 0.3, removeOnCompletion: false, completion: { [weak self] _ in
+            self?.buttonsNode.isHidden = true
+        })
+        
+        guard let closeNode = self.buttonsNode.closeButtonNode,
+              let content = closeNode.currentContent else {
+              return
+          }
+        
+        let closeFrame = self.convert(closeNode.frame, from: self.buttonsNode)
+        let fromNodeCopy = CallControllerButtonItemNode()
+        fromNodeCopy.update(size: closeFrame.size, content: content, text: "", transition: .immediate)
+        fromNodeCopy.frame = closeFrame
+        self.containerNode.addSubnode(fromNodeCopy)
+        fromNodeCopy.layer.animateAlpha(from: 1, to: 0, duration: 0.3, removeOnCompletion: false, completion: { [unowned fromNodeCopy] _ in
+            fromNodeCopy.removeFromSupernode()
+        })
+        
+        closeButton.animateIn(fromRect: self.convert(closeFrame, to: closeButton), textColor: blend(colors: self.backgroundState.colors))
+        ratingNode.animateIn()
+    }
+    
+    @objc private func handleCloseButton() {
+        self.back?()
+    }
+    
+    private func blend(colors: [UIColor]) -> UIColor {
+        let componentsSum = colors.reduce((red: CGFloat(0), green: CGFloat(0), blue: CGFloat(0))) { (temp, color) in
+          guard let components = color.cgColor.components else { return temp }
+          return (temp.0 + components[0], temp.1 + components[1], temp.2 + components[2])
+        }
+        let components = (red: componentsSum.red / CGFloat(colors.count) ,
+                          green: componentsSum.green / CGFloat(colors.count),
+                          blue: componentsSum.blue / CGFloat(colors.count))
+        return UIColor(red: components.red, green: components.green, blue: components.blue, alpha: 1)
+      }
 }
 
 final class CallPanGestureRecognizer: UIPanGestureRecognizer {
