@@ -1196,9 +1196,11 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                         self.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: .immediate)
                     }
                     
-                    self.present?(TooltipScreen(account: self.account, text: "Encryption key of this call", style: .light, icon: nil, location: .point(self.keyButtonNode.frame, .top), displayDuration: .custom(3.0), inset: 16, shouldDismissOnTouch: { _ in
-                        return .dismiss(consume: false)
-                    }))
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: {
+                        self.present?(TooltipScreen(account: self.account, text: "Encryption key of this call", style: .light, icon: nil, location: .point(self.keyButtonNode.frame, .top), displayDuration: .custom(3.0), inset: 16, shouldDismissOnTouch: { _ in
+                            return .dismiss(consume: false)
+                        }))
+                    })
                     
                     self.backButtonNode.isHidden = false
                     self.backButtonArrowNode.isHidden = false
