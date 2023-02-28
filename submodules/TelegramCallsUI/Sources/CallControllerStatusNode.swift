@@ -52,11 +52,11 @@ final class CallControllerStatusNode: ASDisplayNode {
                         snapshotView?.removeFromSuperview()
                     })
                     snapshotView.layer.animateScale(from: 1.0, to: 0.3, duration: 0.3, removeOnCompletion: false)
-                    snapshotView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: snapshotView.frame.height / 2.0), duration: 0.3, delay: 0.0, removeOnCompletion: false, additive: true)
+                    snapshotView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: -snapshotView.frame.height / 2.0), duration: 0.3, delay: 0.0, removeOnCompletion: false, additive: true)
                     
                     self.statusContainerNode.layer.animateScale(from: 0.3, to: 1.0, duration: 0.3)
                     self.statusContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
-                    self.statusContainerNode.layer.animatePosition(from: CGPoint(x: 0.0, y: -snapshotView.frame.height / 2.0), to: CGPoint(), duration: 0.3, delay: 0.0, additive: true)
+                    self.statusContainerNode.layer.animatePosition(from: CGPoint(x: 0.0, y: snapshotView.frame.height / 2.0), to: CGPoint(), duration: 0.3, delay: 0.0, additive: true)
                 }
                                 
                 if case .timer = self.status {
