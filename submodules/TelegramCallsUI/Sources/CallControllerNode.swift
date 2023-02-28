@@ -1260,7 +1260,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             }
         }
         
-        if case let .terminated(id, _, _) = callState.state, let callId = id {
+        if case let .terminated(id, _, reportRating) = callState.state, let callId = id {
             let presentRating = reportRating || self.forceReportRating
             if presentRating {
                 self.presentCallRating(callID: callId, isVideo: self.call.isVideo)
@@ -1410,8 +1410,6 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     }
     
     func animateIn() {
-        
-        
         if !self.containerNode.alpha.isZero {
             var bounds = self.bounds
             bounds.origin = CGPoint()
@@ -1609,13 +1607,13 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         let toastCollapsedOriginY = self.pictureInPictureTransitionFraction > 0.0 ? layout.size.height : layout.size.height - max(layout.intrinsicInsets.bottom, 20.0) - toastHeight
         let toastOriginY = interpolate(from: toastCollapsedOriginY, to: defaultButtonsOriginY - toastSpacing - toastHeight, value: uiDisplayTransition)
         
-        var overlayAlpha: CGFloat = min(pinchTransitionAlpha, uiDisplayTransition)
-        var toastAlpha: CGFloat = min(pinchTransitionAlpha, pipTransitionAlpha)
+        let overlayAlpha: CGFloat = min(pinchTransitionAlpha, uiDisplayTransition)
+        let toastAlpha: CGFloat = min(pinchTransitionAlpha, pipTransitionAlpha)
+        var topAlpha: CGFloat = min(pinchTransitionAlpha, pipTransitionAlpha)
         
         switch self.callState?.state {
         case .terminated, .terminating:
-            overlayAlpha *= 0.5
-            toastAlpha *= 0.5
+            topAlpha = 0
         default:
             break
         }
@@ -1651,8 +1649,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         }
         transition.updateFrame(node: self.backButtonNode, frame: CGRect(origin: CGPoint(x: 29.0, y: topOriginY + 11.0), size: backSize))
         
-        transition.updateAlpha(node: self.backButtonArrowNode, alpha: overlayAlpha)
-        transition.updateAlpha(node: self.backButtonNode, alpha: overlayAlpha)
+        transition.updateAlpha(node: self.backButtonArrowNode, alpha: topAlpha)
+        transition.updateAlpha(node: self.backButtonNode, alpha: topAlpha)
         transition.updateAlpha(node: self.toastNode, alpha: toastAlpha)
         
         let avatarOriginY = topOriginY + 11 + backSize.height + 120
@@ -1777,7 +1775,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         
         let keyTextSize = self.keyButtonNode.frame.size
         transition.updateFrame(node: self.keyButtonNode, frame: CGRect(origin: CGPoint(x: layout.size.width - keyTextSize.width - 8.0, y: topOriginY + 8.0), size: keyTextSize))
-        transition.updateAlpha(node: self.keyButtonNode, alpha: overlayAlpha)
+        transition.updateAlpha(node: self.keyButtonNode, alpha: topAlpha)
         
         if let debugNode = self.debugNode {
             transition.updateFrame(node: debugNode, frame: CGRect(origin: CGPoint(), size: layout.size))
