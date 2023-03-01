@@ -349,6 +349,22 @@ private final class CallVideoNode: ASDisplayNode, PreviewVideoNode {
 }
 
 final class CallControllerNode: ViewControllerTracingNode, CallControllerNodeProtocol {
+    private struct CallTimeContainer {
+        var start: Double? = nil
+        var end: Double? = nil
+        
+        var duration: Double? {
+            guard let start else {
+                return nil
+            }
+            
+            guard let end else {
+                return CFAbsoluteTimeGetCurrent() - start
+            }
+            
+            return end - start
+        }
+    }
     private enum BackgroundState {
         case idle
         case active
@@ -477,6 +493,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     
     private var audioOutputState: ([AudioSessionOutput], currentOutput: AudioSessionOutput?)?
     private var callState: PresentationCallState?
+    private var callTimestamps = CallTimeContainer()
     
     var toggleMute: (() -> Void)?
     var setCurrentAudioOutput: ((AudioSessionOutput) -> Void)?
@@ -909,7 +926,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     func updateCallState(_ callState: PresentationCallState) {
         self.callState = callState
         
-        let statusValue: CallControllerStatusValue
+        var statusValue: CallControllerStatusValue = .text(string: "", showProgress: false)
+        var updatedStatusTitle: String?
         var statusReception: Int32?
         
         switch callState.remoteVideoState {
@@ -1107,22 +1125,34 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 incomingVideoNode.updateIsBlurred(isBlurred: !isActive)
             }
         }
+        
+        let updateStatuses: (inout CallControllerStatusValue, inout String?) -> Void = { statusV, name in
+            if let time = self.callTimestamps.duration {
+                statusV = .timerEnded(time)
+                name = "Call Ended"
+            } else {
+                statusV = .text(string: self.presentationData.strings.Call_StatusEnded, showProgress: false)
+            }
+        }
                 
         switch callState.state {
             case .waiting, .connecting:
                 self.changeBackgroundState(to: .idle)
-                statusValue = .text(string: self.presentationData.strings.Call_StatusConnecting, displayLogo: false)
+                statusValue = .text(string: self.presentationData.strings.Call_StatusConnecting.replacingOccurrences(of: ".", with: ""), showProgress: true)
             case let .requesting(ringing):
                 self.changeBackgroundState(to: .idle)
                 if ringing {
-                    statusValue = .text(string: self.presentationData.strings.Call_StatusRinging, displayLogo: false)
+                    statusValue = .text(string: self.presentationData.strings.Call_StatusRinging.replacingOccurrences(of: ".", with: ""), showProgress: true)
                 } else {
-                    statusValue = .text(string: self.presentationData.strings.Call_StatusRequesting, displayLogo: false)
+                    statusValue = .text(string: self.presentationData.strings.Call_StatusRequesting.replacingOccurrences(of: ".", with: ""), showProgress: true)
                 }
             case .terminating:
                 self.changeBackgroundState(to: .idle)
-                statusValue = .text(string: self.presentationData.strings.Call_StatusEnded, displayLogo: false)
+                updateStatuses(&statusValue, &updatedStatusTitle)
         case let .terminated(_, reason, _):
+            if self.callTimestamps.end == nil {
+                self.callTimestamps.end = CFAbsoluteTimeGetCurrent()
+            }
             self.changeBackgroundState(to: .idle)
             self.stopAudioLevelAnimation()
                 if let reason = reason {
@@ -1130,9 +1160,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                         case let .ended(type):
                             switch type {
                                 case .busy:
-                                    statusValue = .text(string: self.presentationData.strings.Call_StatusBusy, displayLogo: false)
+                                    statusValue = .text(string: self.presentationData.strings.Call_StatusBusy, showProgress: false)
                                 case .hungUp, .missed:
-                                    statusValue = .text(string: self.presentationData.strings.Call_StatusEnded, displayLogo: false)
+                                updateStatuses(&statusValue, &updatedStatusTitle)
                             }
                         case let .error(error):
                             let text = self.presentationData.strings.Call_StatusFailed
@@ -1154,10 +1184,10 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                             default:
                                 break
                             }
-                            statusValue = .text(string: text, displayLogo: false)
+                            statusValue = .text(string: text, showProgress: false)
                     }
                 } else {
-                    statusValue = .text(string: self.presentationData.strings.Call_StatusEnded, displayLogo: false)
+                    updateStatuses(&statusValue, &updatedStatusTitle)
                 }
             case .ringing:
                 var text: String
@@ -1169,8 +1199,11 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 if !self.statusNode.subtitle.isEmpty {
                     text += "\n\(self.statusNode.subtitle)"
                 }
-                statusValue = .text(string: text, displayLogo: false)
+                statusValue = .text(string: text, showProgress: true)
             case .active(let timestamp, let reception, let keyVisualHash), .reconnecting(let timestamp, let reception, let keyVisualHash):
+                if self.callTimestamps.start == nil {
+                    self.callTimestamps.start = timestamp
+                }
                 if self.avatarAnimation == .pulsing {
                     self.updateAvatarAnimation(.blink)
                 }
@@ -1234,6 +1267,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                     break
             }
         }
+        if let updatedStatusTitle {
+            self.statusNode.title = updatedStatusTitle
+        }
         self.statusNode.status = statusValue
         self.statusNode.reception = statusReception
         
@@ -1267,6 +1303,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             if presentRating {
                 self.presentCallRating(callID: callId, isVideo: self.call.isVideo)
             } else {
+                self.endCall?()
                 self.back?()
             }
         }
