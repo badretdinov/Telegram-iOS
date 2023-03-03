@@ -217,6 +217,8 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
                 }
             }
             
+            var willFill: Bool = false
+            
             let contentImage = generateImage(CGSize(width: self.largeButtonSize, height: self.largeButtonSize), contextGenerator: { size, context in
                 context.clear(CGRect(origin: CGPoint(), size: size))
                 
@@ -231,12 +233,14 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
                     if content.hasProgress {
                         fillColor = .white
                         drawOverMask = true
+                        willFill = true
                         context.setBlendMode(.copy)
                         ellipseRect = ellipseRect.insetBy(dx: 7.0, dy: 7.0)
                     } else {
                         if isFilled {
                             fillColor = .white
                             drawOverMask = true
+                            willFill = true
                             context.setBlendMode(.copy)
                         }
                     }
@@ -280,7 +284,7 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
                 case .accept:
                     image = generateTintedImage(image: UIImage(bundleImageName: "Call/CallAcceptButton"), color: imageColor)
                 case .end:
-                    image = generateTintedImage(image: UIImage(bundleImageName: "Call/CallDeclineButton"), color: imageColor)
+                    image = generateTintedImage(image: UIImage(bundleImageName: "Call/CallCancelButton"), color: imageColor)
                 case .cancel:
                     image = generateImage(CGSize(width: 28.0, height: 28.0), opaque: false, rotatedContext: { size, context in
                         let bounds = CGRect(origin: CGPoint(), size: size)
@@ -345,8 +349,49 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
                 self.contentNode.image = contentImage
                 self.contentNode.layer.animateRotation(from: -rotation, to: 0.0, duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring)
             } else if transition.isAnimated, let contentImage = contentImage, let previousContent = self.contentNode.image {
-                self.contentNode.image = contentImage
-                self.contentNode.layer.animate(from: previousContent.cgImage!, to: contentImage.cgImage!, keyPath: "contents", timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, duration: 0.2)
+                let animatingNode = ASImageNode()
+                animatingNode.displaysAsynchronously = true
+                self.contentContainer.insertSubnode(animatingNode, aboveSubnode: self.contentNode)
+                animatingNode.frame = self.contentNode.frame
+                
+                let animatingMaskLayer = CAShapeLayer()
+                animatingMaskLayer.fillRule = .evenOdd
+                animatingNode.layer.mask = animatingMaskLayer
+                
+                let contentMaskLayer = CAShapeLayer()
+                contentMaskLayer.fillRule = .evenOdd
+                self.contentNode.layer.mask = contentMaskLayer
+                
+                let bounds = self.contentNode.bounds
+                let maxPathOuter = UIBezierPath(roundedRect: bounds, cornerRadius: bounds.height/2)
+                maxPathOuter.append(UIBezierPath(roundedRect: bounds, cornerRadius: bounds.height/2))
+                let minPathOuter = UIBezierPath(roundedRect: bounds, cornerRadius: bounds.height/2)
+                minPathOuter.append(UIBezierPath(rect: CGRect(origin: bounds.center, size: .zero)))
+                
+                let maxPathInner = UIBezierPath(roundedRect: bounds, cornerRadius: bounds.height/2)
+                let minPathInner = UIBezierPath(rect: CGRect(origin: bounds.center, size: .zero))
+                
+                if willFill {
+                    animatingNode.image = contentImage
+                    
+                    animatingMaskLayer.animate(from: maxPathOuter.cgPath, to: minPathOuter.cgPath, keyPath: "path", timingFunction: kCAMediaTimingFunctionSpring, duration: 0.3, removeOnCompletion: false, completion: { _ in
+                        self.contentNode.image = contentImage
+                        animatingNode.removeFromSupernode()
+                        self.contentNode.layer.mask = nil
+                    })
+                    
+                    contentMaskLayer.animate(from: maxPathInner.cgPath, to: minPathInner.cgPath, keyPath: "path", timingFunction: kCAMediaTimingFunctionSpring, duration: 0.3, removeOnCompletion: false)
+                } else {
+                    animatingNode.image = previousContent
+                    self.contentNode.image = contentImage
+                    
+                    animatingMaskLayer.animate(from: minPathOuter.cgPath, to: maxPathOuter.cgPath, keyPath: "path", timingFunction: kCAMediaTimingFunctionSpring, duration: 0.3)
+                    
+                    contentMaskLayer.animate(from: minPathInner.cgPath, to: maxPathInner.cgPath, keyPath: "path", timingFunction: kCAMediaTimingFunctionSpring, duration: 0.3, removeOnCompletion: false, completion: { _ in
+                        self.contentNode.layer.mask = nil
+                        animatingNode.removeFromSupernode()
+                    })
+                }
             } else {
                 self.contentNode.image = contentImage
             }
