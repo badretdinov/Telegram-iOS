@@ -434,6 +434,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     
     private var backgroundNode: GradientBackgroundNode
     private var backgroundState: BackgroundState = .idle
+    private var isBackgroundStopped: Bool = false
+    private var backgroundInteractionTimer: SwiftSignalKit.Timer?
+    private var backgroundTimerHasBeenInitialized: Bool = false
     
     private var candidateIncomingVideoNodeValue: CallVideoNode?
     private var incomingVideoNodeValue: CallVideoNode?
@@ -1203,6 +1206,11 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             case .active(let timestamp, let reception, let keyVisualHash), .reconnecting(let timestamp, let reception, let keyVisualHash):
                 if self.callTimestamps.start == nil {
                     self.callTimestamps.start = timestamp
+                    
+                }
+                if !self.backgroundTimerHasBeenInitialized {
+                    self.backgroundTimerHasBeenInitialized = true
+                    self.restartBackgroundInteractionTimer()
                 }
                 if self.avatarAnimation == .pulsing {
                     self.updateAvatarAnimation(.blink)
@@ -2255,6 +2263,12 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     }
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        // Temporary solution. This logic should be moved somewhere
+        if self.bounds.contains(point) {
+            self.restartBackgroundInteractionTimer()
+            self.restoreBackgroundAnimation()
+        }
+        
         if self.debugNode != nil {
             return super.hitTest(point, with: event)
         }
@@ -2290,6 +2304,10 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             
             self.backgroundNode.removeFromSupernode()
             self.backgroundNode = newNode
+        })
+        
+        self.containerNode.layer.animate(from: self.containerNode.layer.backgroundColor, to: self.blend(colors: newState.colors).cgColor, keyPath: "backgroundColor", timingFunction: CAMediaTimingFunctionName.linear.rawValue, duration: 0.3, removeOnCompletion: false, completion: { [weak self] _ in
+            self?.containerNode.backgroundColor = self?.blend(colors: newState.colors)
         })
     }
     
@@ -2418,6 +2436,43 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                           blue: componentsSum.blue / CGFloat(colors.count))
         return UIColor(red: components.red, green: components.green, blue: components.blue, alpha: 1)
       }
+    
+    private func restartBackgroundInteractionTimer() {
+        guard self.backgroundTimerHasBeenInitialized else {
+            return
+        }
+        
+        self.backgroundInteractionTimer?.invalidate()
+        let timer = SwiftSignalKit.Timer(timeout: 10, repeat: false, completion: { [weak self] in
+            self?.backgroundNode.layer.animateAlpha(from: 1, to: 0, duration: 0.3, removeOnCompletion: false, completion: { _ in
+                self?.isBackgroundStopped = true
+                self?.backgroundNode.stopUnlimitedAnimation()
+                self?.backgroundNode.isHidden = true
+            })
+            
+            self?.audioLevelNode.layer.animateAlpha(from: 1, to: 0, duration: 0.3, removeOnCompletion: false, completion: { _ in
+                self?.audioLevelNode.layer.isHidden = true
+            })
+        }, queue: Queue.mainQueue())
+        timer.start()
+        
+        self.backgroundInteractionTimer = timer
+    }
+    
+    private func restoreBackgroundAnimation() {
+        guard self.backgroundNode.isHidden else {
+            return
+        }
+        
+        self.backgroundNode.startUnlimitedAnimation()
+        self.backgroundNode.isHidden = false
+        self.backgroundNode.layer.animateAlpha(from: 0, to: 1, duration: 0.3, completion: { [weak self] _ in
+            self?.isBackgroundStopped = false
+        })
+        
+        self.audioLevelNode.isHidden = false
+        self.audioLevelNode.layer.animateAlpha(from: 0, to: 1, duration: 0.3)
+    }
 }
 
 final class CallPanGestureRecognizer: UIPanGestureRecognizer {

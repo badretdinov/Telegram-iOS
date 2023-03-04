@@ -579,9 +579,22 @@ public final class GradientBackgroundNode: ASDisplayNode {
         self.itterateAnimation()
     }
     
+    public func stopUnlimitedAnimation() {
+        guard self.hasUnlimiedAnimation else {
+            return
+        }
+        
+        self.layer.removeAllAnimations()
+        self.hasUnlimiedAnimation = false
+    }
+    
     private func itterateAnimation() {
         self.animateEvent(transition: .animated(duration: 1, curve: .linear), extendAnimation: false, backwards: false, completion: { [weak self] in
-            self?.itterateAnimation()
+            guard let self, self.hasUnlimiedAnimation else {
+                return
+            }
+            
+            self.itterateAnimation()
         })
     }
 }
